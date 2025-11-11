@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
+import { demoTasks } from "./data/demoTasks";
+
 
 import Home from "./pages/Home";
 import Search from "./pages/Search";
@@ -16,9 +18,15 @@ export default function App() {
     }
   });
 
-  useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-  }, [tasks]);
+  // Seed demo tasks only on first load if empty
+useEffect(() => {
+  const saved = JSON.parse(localStorage.getItem("tasks"));
+  if (!saved || saved.length === 0) {
+    localStorage.setItem("tasks", JSON.stringify(demoTasks));
+    setTasks(demoTasks);
+  }
+}, []);
+
 
   const saveTasks = (next) => {
     setTasks(next);
