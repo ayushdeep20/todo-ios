@@ -40,3 +40,29 @@
 .read-the-docs {
   color: #888;
 }
+body {
+  background: #000;
+  display: flex;
+  justify-content: center;
+}
+
+#root {
+  width: 100%;
+  max-width: 420px; /* perfect iPhone width */
+  background: #000;
+  min-height: 100vh;
+}
+.fab-pop {
+  animation: pop 0.25s ease-out;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

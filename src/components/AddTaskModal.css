@@ -1,0 +1,84 @@
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(3px);
+  z-index: 9999;
+}
+
+.modalContainer {
+  width: 90%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 24px;
+  animation: fadeIn 0.2s ease;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.closeBtn {
+  border: none;
+  background: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #444;
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.modalInput {
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid #e4e4e4;
+  outline: none;
+  font-size: 15px;
+  background: #f7f7f7;
+}
+
+.textarea {
+  min-height: 80px;
+  resize: none;
+}
+
+.inputGroup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inputGroup span {
+  margin-left: 8px;
+  font-size: 18px;
+}
+
+.addBtn {
+  background: #316BFF;
+  color: white;
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 16px;
+  border: none;
+  cursor: pointer;
+}
+
+.addBtn:hover {
+  background: #2554d8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

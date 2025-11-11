@@ -1,419 +1,323 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import {
+  FaPlus,
+  FaTrash,
+  FaEdit,
+  FaChevronLeft,
+  FaChevronRight,
+} from "react-icons/fa";
+import AddTaskModal from "../components/AddTaskModal";
+import EditTaskModal from "../components/EditTaskModal";
 
-const API_BASE = "https://todo-api-production-9d6b.up.railway.app"; // your live API
-
-// ---------- date helpers ----------
-const startOfWeek = (date) => {
+/* ---------- Dates (LOCAL) ---------- */
+const formatDate = (date) => {
+  return new Date(date).toLocaleDateString("en-CA"); // YYYY-MM-DD
+};
+const startOfWeekMon = (date) => {
   const d = new Date(date);
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1) - day;
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + diff);
+  const day = d.getDay(); // 0 Sun
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
   return d;
 };
-const endOfWeek = (date) => {
-  const s = startOfWeek(date);
-  const e = new Date(s);
-  e.setDate(e.getDate() + 6);
-  e.setHours(23, 59, 59, 999);
-  return e;
-};
-const sameDay = (a, b) =>
-  a &&
-  b &&
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
 
-// ---------- component ----------
-export default function Home() {
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const [weekAnchor, setWeekAnchor] = useState(startOfWeek(new Date()));
-  const [selectedDay, setSelectedDay] = useState(null);
-
-  const [showForm, setShowForm] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editId, setEditId] = useState(null);
-
-  const [newTask, setNewTask] = useState({
-    title: "",
-    description: "",
-    date: new Date().toISOString().split("T")[0],
-    time: "12:00",
-    priority: "Low",
-    status: "In Progress",
-  });
-
-  // ---------- API helpers ----------
-  const fetchJSON = async (url, options) => {
-    const res = await fetch(url, {
-      headers: { "Content-Type": "application/json" },
-      ...options,
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`);
-    }
-    return res.json();
-  };
-
-  // load tasks from API
+/* ---------- Count-up ---------- */
+function useCountUp(value, duration = 600) {
+  const [count, setCount] = useState(0);
   useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        const data = await fetchJSON(`${API_BASE}/tasks`);
-        setTasks(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error(e);
-        alert("Failed to load tasks from server.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    let startTime = null;
+    const start = 0;
+    const end = value;
+    const step = (ts) => {
+      if (!startTime) startTime = ts;
+      const p = Math.min((ts - startTime) / duration, 1);
+      setCount(Math.floor(start + (end - start) * p));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [value, duration]);
+  return count;
+}
 
-  // computed week and filters
-  const weekDays = useMemo(() => {
-    const s = startOfWeek(weekAnchor);
-    return [...Array(7)].map((_, i) => {
-      const d = new Date(s);
-      d.setDate(s.getDate() + i);
+export default function Home({ tasks, onAdd, onUpdate, onToggle, onDelete }) {
+  const todayStr = formatDate(new Date());
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [weekStart, setWeekStart] = useState(() => startOfWeekMon(new Date()));
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [taskToEdit, setTaskToEdit] = useState(null);
+
+  /* Week helpers */
+  const getWeekDates = () =>
+    [...Array(7)].map((_, idx) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + idx);
       return d;
     });
-  }, [weekAnchor]);
 
-  const tasksThisWeek = tasks.filter((t) => {
-    const date = new Date(t.date);
-    return date >= startOfWeek(weekAnchor) && date <= endOfWeek(weekAnchor);
-  });
-
-  const tasksForDisplay = selectedDay
-    ? tasksThisWeek.filter((t) => sameDay(new Date(t.date), selectedDay))
-    : tasksThisWeek;
-
-  const completed = tasksThisWeek.filter((t) => t.status === "Completed").length;
-
-  // week navigation
-  const changeWeekBy = (delta) => {
-    const next = new Date(weekAnchor);
-    next.setDate(next.getDate() + delta * 7);
-    setWeekAnchor(startOfWeek(next));
-    setSelectedDay(null);
+  const goWeek = (delta) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + delta * 7);
+    setWeekStart(d);
+    const sel = new Date(selectedDate);
+    sel.setDate(sel.getDate() + delta * 7);
+    setSelectedDate(formatDate(sel));
   };
 
-  // modal handlers
-  const openAddModal = () => {
-    setIsEditing(false);
-    setEditId(null);
-    setNewTask({
-      title: "",
-      description: "",
-      date: new Date().toISOString().split("T")[0],
-      time: "12:00",
-      priority: "Low",
-      status: "In Progress",
-    });
-    setShowForm(true);
+  /* Derived */
+  const weekDates = getWeekDates();
+  const weekStartStr = formatDate(weekDates[0]);
+  const weekEndStr = formatDate(weekDates[6]);
+
+  const normalizeTaskDate = (raw) => (raw ? formatDate(new Date(raw)) : selectedDate);
+
+  /* CRUD wrappers */
+  const handleAddTask = (task) => {
+    const normalized = {
+      ...task,
+      id: Date.now(),
+      date: normalizeTaskDate(task.date),
+      completed: !!task.completed,
+    };
+    onAdd(normalized);
+    setIsAddOpen(false);
   };
 
-  const openEditModal = (task) => {
-    setIsEditing(true);
-    setEditId(task._id);
-    setNewTask({
-      title: task.title || "",
-      description: task.description || "",
-      date: task.date || new Date().toISOString().split("T")[0],
-      time: task.time || "12:00",
-      priority: task.priority || "Low",
-      status: task.status || "In Progress",
-    });
-    setShowForm(true);
+  const handleEditTask = (task) => {
+    setTaskToEdit(task);
+    setIsEditOpen(true);
+  };
+  const handleUpdateTask = (updatedTask) => {
+    const normalized = { ...updatedTask, date: normalizeTaskDate(updatedTask.date) };
+    onUpdate(normalized);
+    setIsEditOpen(false);
+    setTaskToEdit(null);
   };
 
-  const saveTask = async () => {
-    if (!newTask.title.trim()) return;
+  /* Filters & Stats */
+  const todaysTasks = tasks.filter((t) => t.date === selectedDate);
+  const pendingTasks = todaysTasks.filter((t) => !t.completed);
+  const completedTasks = todaysTasks.filter((t) => t.completed);
 
-    try {
-      if (isEditing && editId) {
-        const updated = await fetchJSON(`${API_BASE}/tasks/${editId}`, {
-          method: "PUT",
-          body: JSON.stringify(newTask),
-        });
-        setTasks((prev) =>
-          prev.map((t) => (t._id === editId ? { ...updated } : t))
-        );
-      } else {
-        const created = await fetchJSON(`${API_BASE}/tasks`, {
-          method: "POST",
-          body: JSON.stringify(newTask),
-        });
-        setTasks((prev) => [created, ...prev]);
-      }
-      setShowForm(false);
-    } catch (e) {
-      console.error(e);
-      alert("Failed to save task.");
-    }
-  };
+  const weeklyTasks = tasks.filter(
+    (t) => t.date >= weekStartStr && t.date <= weekEndStr
+  );
+  const weeklyDone = weeklyTasks.filter((t) => t.completed).length;
+  const weeklyPending = weeklyTasks.length - weeklyDone;
+  const weeklyPct = weeklyTasks.length
+    ? Math.round((weeklyDone / weeklyTasks.length) * 100)
+    : 0;
 
-  const toggleStatus = async (task) => {
-    try {
-      const nextStatus = task.status === "Completed" ? "In Progress" : "Completed";
-      // optimistic update
-      setTasks((prev) =>
-        prev.map((t) => (t._id === task._id ? { ...t, status: nextStatus } : t))
-      );
-      await fetchJSON(`${API_BASE}/tasks/${task._id}`, {
-        method: "PUT",
-        body: JSON.stringify({ ...task, status: nextStatus }),
-      });
-    } catch (e) {
-      console.error(e);
-      alert("Failed to toggle status. Reverting.");
-      // revert by refetching quickly
-      try {
-        const fresh = await fetchJSON(`${API_BASE}/tasks`);
-        setTasks(Array.isArray(fresh) ? fresh : []);
-      } catch {}
-    }
-  };
+  const animPending = useCountUp(weeklyPending);
+  const animCompleted = useCountUp(weeklyDone);
 
-  const deleteTask = async (task) => {
-    try {
-      // optimistic remove
-      setTasks((prev) => prev.filter((t) => t._id !== task._id));
-      await fetchJSON(`${API_BASE}/tasks/${task._id}`, { method: "DELETE" });
-    } catch (e) {
-      console.error(e);
-      alert("Failed to delete task. Reverting.");
-      try {
-        const fresh = await fetchJSON(`${API_BASE}/tasks`);
-        setTasks(Array.isArray(fresh) ? fresh : []);
-      } catch {}
-    }
-  };
+  const priorityBadge = (p) =>
+    p === "High"
+      ? "bg-red-200 text-red-700"
+      : p === "Medium"
+      ? "bg-yellow-200 text-yellow-700"
+      : "bg-green-200 text-green-700";
 
   return (
-    <main className="mx-auto max-w-sm min-h-screen bg-white text-gray-900 pb-24">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur px-4 py-3 border-b flex justify-between">
-        <button onClick={() => changeWeekBy(-1)} className="px-3 py-1 bg-gray-100 rounded-lg">←</button>
-        <h1 className="text-lg font-semibold">Tasks</h1>
-        <button onClick={() => changeWeekBy(1)} className="px-3 py-1 bg-gray-100 rounded-lg">→</button>
+    <div className="p-5 pb-28 max-w-md mx-auto min-h-screen bg-white">
+      {/* Month + arrows */}
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={() => goWeek(-1)}
+          className="p-2 text-xl text-gray-700 active:scale-95"
+          aria-label="Previous week"
+        >
+          <FaChevronLeft />
+        </button>
+        <h2 className="font-semibold text-lg">
+          {weekStart.toLocaleString("en-US", { month: "long", year: "numeric" })}
+        </h2>
+        <button
+          onClick={() => goWeek(1)}
+          className="p-2 text-xl text-gray-700 active:scale-95"
+          aria-label="Next week"
+        >
+          <FaChevronRight />
+        </button>
       </div>
 
-      {/* Month label */}
-      <p className="text-center text-sm text-gray-500 mt-4">
-        {weekAnchor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-      </p>
-
-      {/* Clickable Week Ribbon with 'today' marker */}
-      <div className="flex justify-between px-4 mt-3">
-        {weekDays.map((d, i) => {
-          const isToday = sameDay(d, new Date());
-          const isSelected = selectedDay && sameDay(d, selectedDay);
+      {/* Week ribbon */}
+      <div className="flex justify-between gap-2 mb-4">
+        {weekDates.map((d) => {
+          const dStr = formatDate(d);
+          const isSelected = dStr === selectedDate;
+          const isToday = dStr === todayStr;
           return (
             <button
-              key={i}
-              onClick={() => setSelectedDay(d)}
-              className="flex flex-col items-center text-sm"
-              title={isToday ? "Today" : undefined}
+              key={dStr}
+              onClick={() => setSelectedDate(dStr)}
+              className={`flex flex-col items-center px-2 py-1 rounded-xl w-12 text-center transition ${
+                isSelected
+                  ? "bg-blue-600 text-white"
+                  : isToday
+                  ? "border border-blue-600 text-blue-700"
+                  : "text-gray-700"
+              }`}
             >
-              <span className="leading-none">
-                {d.toLocaleDateString("en-US", { weekday: "short" })}
+              <span className="text-[10px]">
+                {d.toLocaleString("en-US", { weekday: "short" })}
               </span>
-              <span
-                className={`mt-1 w-8 h-8 flex items-center justify-center rounded-full transition ${
-                  isSelected
-                    ? "bg-blue-600 text-white"
-                    : isToday
-                    ? "bg-white text-blue-600 ring-2 ring-blue-500"
-                    : "bg-gray-200 text-gray-900"
-                }`}
-              >
-                {d.getDate()}
-              </span>
-              {!isSelected && isToday && (
-                <span className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500" />
-              )}
+              <span className="font-semibold">{d.getDate()}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Stats */}
-      <div className="px-4 mt-6 flex gap-3">
-        <div className="flex-1 bg-blue-100 p-3 rounded-xl">
-          <p className="text-xs">Completed</p>
-          <p className="text-xl font-bold">{completed}</p>
-        </div>
-        <div className="flex-1 bg-red-100 p-3 rounded-xl">
-          <p className="text-xs">Pending</p>
-          <p className="text-xl font-bold">{tasksThisWeek.length - completed}</p>
-        </div>
-      </div>
-
       {/* Weekly progress */}
-      <div className="px-4 mt-4">
-        <p className="text-sm text-gray-500 mb-1">
-          {tasksThisWeek.length ? Math.round((completed / tasksThisWeek.length) * 100) : 0}% Completed this week
+      <div className="mb-3">
+        <p className="text-xs text-gray-600 mb-1">
+          {weeklyPct}% completed this week
         </p>
-        <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
           <div
-            className="h-full bg-blue-600 transition-all"
-            style={{
-              width: tasksThisWeek.length
-                ? `${(completed / tasksThisWeek.length) * 100}%`
-                : "0%",
-            }}
+            className="h-2 bg-blue-600 rounded-full transition-all"
+            style={{ width: `${weeklyPct}%` }}
           />
         </div>
       </div>
 
-      {/* Loading state */}
-      {loading && (
-        <div className="px-4 mt-8 text-sm text-gray-500">Loading tasks… try not to blink.</div>
-      )}
+      {/* Animated weekly Pending/Completed */}
+      <div className="flex items-center mb-4">
+        <div className="flex-1 text-center">
+          <div className="text-3xl font-bold text-blue-600">{animPending}</div>
+          <div className="text-sm text-gray-500">Pending (This Week)</div>
+        </div>
+        <div className="w-px h-10 bg-gray-300" />
+        <div className="flex-1 text-center">
+          <div className="text-3xl font-bold text-green-600">{animCompleted}</div>
+          <div className="text-sm text-gray-500">Completed (This Week)</div>
+        </div>
+      </div>
 
-      {/* Task List */}
-      <div className="px-4 mt-6 space-y-3">
-        {!loading && tasksForDisplay.map((t, i) => (
-          <div key={t._id || i} className="relative overflow-hidden" onClick={() => openEditModal(t)}>
-            <motion.div
-              drag="x"
-              dragConstraints={{ left: -80, right: 0 }}
-              onDragEnd={(e, info) => {
-                const btn = document.getElementById(`delete-${t._id || i}`);
-                if (btn) btn.style.transform = info.offset.x < -60 ? "translateX(0)" : "translateX(100%)";
-              }}
-              className="flex justify-between items-center p-3 rounded-xl bg-gray-50 border"
-            >
+      {/* Add task big button */}
+      <button
+        onClick={() => setIsAddOpen(true)}
+        className="w-full bg-blue-600 text-white py-3 rounded-xl text-lg flex items-center justify-center gap-2 shadow-md mb-3 active:scale-95"
+      >
+        <FaPlus /> Add Task
+      </button>
+
+      {/* Task list (scrollable) */}
+      <div
+        className="space-y-3 overflow-y-auto pr-1"
+        style={{ maxHeight: "calc(100vh - 330px)" }}
+      >
+        {todaysTasks.length === 0 && (
+          <p className="text-center text-gray-500 mt-4">No tasks for this day.</p>
+        )}
+
+        {/* Pending first */}
+        {pendingTasks.map((task) => (
+          <div
+            key={task.id}
+            className="flex items-center justify-between p-3 bg-gray-50 rounded-xl shadow-sm"
+          >
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={task.completed}
+                onChange={() => onToggle(task.id)}
+                className="w-5 h-5 accent-blue-600"
+              />
               <div>
-                <p className={`font-medium ${t.status === "Completed" ? "line-through text-gray-400" : ""}`}>
-                  {t.title}
+                <p className="font-medium">{task.title}</p>
+                {task.time && (
+                  <p className="text-xs text-gray-500">{task.time}</p>
+                )}
+                {task.priority && (
+                  <span
+                    className={`inline-block mt-1 text-xs px-2 py-0.5 rounded ${priorityBadge(
+                      task.priority
+                    )}`}
+                  >
+                    {task.priority}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-lg">
+              <button
+                className="text-blue-600"
+                onClick={() => handleEditTask(task)}
+                title="Edit"
+              >
+                <FaEdit />
+              </button>
+              <button
+                className="text-red-500"
+                onClick={() => onDelete(task.id)}
+                title="Delete"
+              >
+                <FaTrash />
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {/* Completed next */}
+        {completedTasks.map((task) => (
+          <div
+            key={task.id}
+            className="flex items-center justify-between p-3 bg-gray-100 rounded-xl opacity-80"
+          >
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={task.completed}
+                onChange={() => onToggle(task.id)}
+                className="w-5 h-5 accent-blue-600"
+              />
+              <div>
+                <p className="font-medium line-through text-gray-500">
+                  {task.title}
                 </p>
-                <p className="text-xs text-gray-500">{t.date} • {t.time}</p>
-                <span
-                  className={`inline-block px-2 py-0.5 mt-1 rounded-full text-[10px] font-semibold ${
-                    t.priority === "High"
-                      ? "bg-red-100 text-red-600"
-                      : t.priority === "Medium"
-                      ? "bg-yellow-100 text-yellow-600"
-                      : "bg-blue-100 text-blue-600"
-                  }`}
-                >
-                  {t.priority}
-                </span>
+                {task.time && (
+                  <p className="text-xs text-gray-400">{task.time}</p>
+                )}
+                {task.priority && (
+                  <span
+                    className={`inline-block mt-1 text-xs px-2 py-0.5 rounded ${priorityBadge(
+                      task.priority
+                    )}`}
+                  >
+                    {task.priority}
+                  </span>
+                )}
               </div>
-
-              {/* Checkbox with click isolation */}
-              <div onClick={(e) => e.stopPropagation()} className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={t.status === "Completed"}
-                  onChange={() => toggleStatus(t)}
-                  className="w-4 h-4"
-                />
-              </div>
-            </motion.div>
-
+            </div>
             <button
-              id={`delete-${t._id || i}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                deleteTask(t);
-              }}
-              className="absolute right-0 top-0 h-full w-20 bg-red-600 text-white rounded-xl flex items-center justify-center transition-all"
-              style={{ transform: "translateX(100%)" }}
+              className="text-red-500"
+              onClick={() => onDelete(task.id)}
+              title="Delete"
             >
-              Delete
+              <FaTrash />
             </button>
           </div>
         ))}
       </div>
 
-      {/* Add Task Button */}
-      <button
-        onClick={openAddModal}
-        className="fixed bottom-28 left-1/2 -translate-x-1/2 bg-blue-600 text-white w-12 h-12 rounded-full text-2xl shadow-md flex items-center justify-center active:scale-95"
-      >
-        ✚
-      </button>
-
-      {/* Modal */}
-      {showForm && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm px-5">
-          <motion.div
-            initial={{ y: 40, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.25 }}
-            className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-xl relative"
-          >
-            <button
-              onClick={() => setShowForm(false)}
-              className="absolute right-4 top-4 text-gray-400 hover:text-black transition text-lg"
-            >
-              ✕
-            </button>
-
-            <h2 className="text-xl font-semibold text-center mb-6">
-              {isEditing ? "Edit Task" : "New Task"}
-            </h2>
-
-            <div className="space-y-4">
-              <input
-                className="w-full p-3 rounded-xl bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="Title"
-                value={newTask.title}
-                onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-              />
-
-              <textarea
-                className="w-full p-3 rounded-xl bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="Description"
-                rows="3"
-                value={newTask.description}
-                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-              />
-
-              <input
-                type="date"
-                className="w-full p-3 rounded-xl bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
-                value={newTask.date}
-                onChange={(e) => setNewTask({ ...newTask, date: e.target.value })}
-              />
-
-              <input
-                type="time"
-                className="w-full p-3 rounded-xl bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
-                value={newTask.time}
-                onChange={(e) => setNewTask({ ...newTask, time: e.target.value })}
-              />
-
-              <select
-                className="w-full p-3 rounded-xl bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
-                value={newTask.priority}
-                onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-              >
-                <option value="Low">Low Priority</option>
-                <option value="Medium">Medium Priority</option>
-                <option value="High">High Priority</option>
-              </select>
-
-              <button
-                onClick={saveTask}
-                className="w-full bg-blue-600 text-white py-3 rounded-xl active:scale-95 transition"
-              >
-                {isEditing ? "Save Changes" : "Add Task"}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </main>
+      {/* Modals */}
+      <AddTaskModal
+        isOpen={isAddOpen}
+        onClose={() => setIsAddOpen(false)}
+        onAdd={handleAddTask}
+        defaultDate={selectedDate}
+      />
+      <EditTaskModal
+        isOpen={isEditOpen}
+        onClose={() => {
+          setIsEditOpen(false);
+          setTaskToEdit(null);
+        }}
+        task={taskToEdit}
+        onUpdate={handleUpdateTask}
+      />
+    </div>
   );
 }

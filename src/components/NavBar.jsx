@@ -1,29 +1,56 @@
-import { Link, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
+import { FaHome, FaSearch, FaCalendarAlt, FaUser } from "react-icons/fa";
 
 export default function NavBar() {
-  const { pathname } = useLocation();
-
-  const isActive = (path) =>
-    pathname === path
-      ? "text-blue-600 scale-110 shadow-sm"
-      : "text-gray-400 scale-100";
+  const linkBase =
+    "flex flex-col items-center justify-center text-xs flex-1 py-2";
+  const active = "text-blue-600";
+  const inactive = "text-gray-500";
 
   return (
-    <nav className="fixed bottom-5 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/80 backdrop-blur-xl border border-gray-200 shadow-lg rounded-3xl px-6 py-3 flex justify-between transition-all">
-      <Link className={`flex flex-col items-center gap-1 transition ${isActive("/home")}`} to="/home">
-        <span className="text-2xl">🏠</span>
-        <span className="text-[11px]">Home</span>
-      </Link>
+    <nav className="fixed bottom-0 left-0 right-0 border-t bg-white/95 backdrop-blur px-4">
+      <div className="max-w-md mx-auto flex">
+        <NavLink
+          to="/"
+          className={({ isActive }) =>
+            `${linkBase} ${isActive ? active : inactive}`
+          }
+          end
+        >
+          <FaHome className="text-xl" />
+          <span>Home</span>
+        </NavLink>
 
-      <Link className={`flex flex-col items-center gap-1 transition ${isActive("/search")}`} to="/search">
-        <span className="text-2xl">🔍</span>
-        <span className="text-[11px]">Search</span>
-      </Link>
+        <NavLink
+          to="/search"
+          className={({ isActive }) =>
+            `${linkBase} ${isActive ? active : inactive}`
+          }
+        >
+          <FaSearch className="text-xl" />
+          <span>Search</span>
+        </NavLink>
 
-      <Link className={`flex flex-col items-center gap-1 transition ${isActive("/calendar")}`} to="/calendar">
-        <span className="text-2xl">📅</span>
-        <span className="text-[11px]">Calendar</span>
-      </Link>
+        <NavLink
+          to="/calendar"
+          className={({ isActive }) =>
+            `${linkBase} ${isActive ? active : inactive}`
+          }
+        >
+          <FaCalendarAlt className="text-xl" />
+          <span>Calendar</span>
+        </NavLink>
+
+        <NavLink
+          to="/onboarding"
+          className={({ isActive }) =>
+            `${linkBase} ${isActive ? active : inactive}`
+          }
+        >
+          <FaUser className="text-xl" />
+          <span>Start</span>
+        </NavLink>
+      </div>
     </nav>
   );
 }
